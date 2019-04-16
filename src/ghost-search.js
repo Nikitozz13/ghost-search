@@ -1,9 +1,10 @@
 'use strict';
 
 /**
- * @requires ../node_modules/fuzzysort/fuzzysort.js
+ * @requires ../node_modules/fuse.js/dist/fuse.js
+ * @requires ../node_modules/@babel/polyfill/dist/polyfill.min.js
  */
- 
+
 class GhostSearch {
     constructor(args) {
 
@@ -19,20 +20,28 @@ class GhostSearch {
             defaultValue: '',
             template: function(result) {
                 let url = [location.protocol, '//', location.host].join('');
-                return '<a href="' + url + '/' + result.slug + '/">' + result.title + '</a>';  
+                return '<a href="' + url + '/' + result.slug + '/">' + result.title + '</a>';
             },
             trigger: 'focus',
             options: {
-                keys: [
-                    'title'
-                ],
+                keys: ['title'],
                 limit: 10,
-                threshold: -3500,
-                allowTypo: false
+                async: true,
+                asyncChunks: 1,
+                shouldSort: true,
+                tokenize: true,
+                matchAllTokens: true,
+                includeMatches: true,
+                includeScore: true,
+                threshold: 0.3,
+                location: 0,
+                distance: 50000,
+                maxPatternLength: 32,
+                minMatchCharLength: 2
             },
             api: {
                 resource: 'posts',
-                parameters: { 
+                parameters: {
                     limit: 'all',
                     fields: ['title', 'slug'],
                     filter: '',
@@ -46,7 +55,8 @@ class GhostSearch {
                 beforeDisplay: function(){},
                 afterDisplay: function(results){},
                 beforeFetch: function(){},
-                afterFetch: function(results){}
+                afterFetch: function(results){},
+                beforeSearch: function(){}
             }
         }
 
@@ -102,34 +112,75 @@ class GhostSearch {
     createElementFromHTML(htmlString) {
         var div = document.createElement('div');
         div.innerHTML = htmlString.trim();
-        return div.firstChild; 
+        return div.firstChild;
     }
 
-    displayResults(data){
+    displayResults(data) {
 
-        if (document.querySelectorAll(this.results)[0].firstChild !== null && document.querySelectorAll(this.results)[0].firstChild !== '') {
-            while (document.querySelectorAll(this.results)[0].firstChild) {
-                document.querySelectorAll(this.results)[0].removeChild(document.querySelectorAll(this.results)[0].firstChild);
-            }
-        };
+        this.on.beforeSearch();
 
-        let inputValue = document.querySelectorAll(this.input)[0].value;
-        if(this.defaultValue != ''){
+        let inputValue = document.querySelectorAll(this.input)[0].value.trim();
+        if (this.defaultValue != '') {
             inputValue = this.defaultValue;
         }
-        const results = fuzzysort.go(inputValue, data, {
-            keys: this.options.keys,
-            limit: this.options.limit,
-            allowTypo: this.options.allowTypo,
-            threshold: this.options.threshold
-        });
-        for (let key in results){
-            if (key < results.length) {
-                document.querySelectorAll(this.results)[0].appendChild(this.createElementFromHTML(this.template(results[key].obj)));
-            };
+        if (this.options.async) {
+            this.searchAsyncImproved(data, inputValue)
+              .catch(e => { console.error(e) });
+        } else {
+            const fuse = new Fuse(data, this.options);
+            const results = fuse.search(inputValue);
+            this.displayResultsInBrowser(results);
         }
 
-        this.on.afterDisplay(results)
+    }
+
+    async searchAsync(fuse, inputValue) {
+
+        let promise = new Promise(function(resolve, reject) {
+            resolve(fuse.search(inputValue));
+        });
+        let results = await promise;
+        return results;
+
+    }
+
+    async searchAsyncImproved(data, inputValue) {
+
+        const chunksCount = this.options.asyncChunks;
+        const promises = [];
+
+        for (let i=0; i < data.length; i+=chunksCount) {
+            const fuse = new Fuse(data.slice(i, i + chunksCount), this.options);
+            const promiseInstance = new Promise(function(resolve, reject) {
+                setTimeout(() => resolve(fuse.search(inputValue)), 0);
+            });
+            promises.push(promiseInstance);
+        }
+        let results = await Promise.all(promises);
+        results = results.flat().sort((a, b) => { return a.score - b.score });
+        this.displayResultsInBrowser(results);
+
+    }
+
+    displayResultsInBrowser(results) {
+
+        results = results.slice(0, this.options.limit);
+
+        let tempBlock = document.createElement('div');
+
+        for (let key in results) {
+            if (key < results.length) {
+                let item = results[key];
+                /* For case if includeMatches turned on */
+                if (item.matches) item = item.item;
+                //document.querySelectorAll(this.results)[0].appendChild(this.createElementFromHTML(this.template(item)));
+                tempBlock.appendChild(this.createElementFromHTML(this.template(item)));
+            }
+        }
+
+        document.querySelectorAll(this.results)[0].innerHTML = tempBlock.innerHTML;
+
+        this.on.afterDisplay(results);
         this.defaultValue = '';
 
     }

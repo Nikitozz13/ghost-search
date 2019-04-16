@@ -25,7 +25,8 @@
   },
   "homepage": "https://github.com/HauntedThemes/ghost-search",
   "dependencies": {
-    "fuzzysort": "^1.1.4"
+    "@babel/polyfill": "^7.4.3",
+    "fuse.js": "^3.4.4"
   },
   "devDependencies": {
     "@babel/core": "^7.1.6",
