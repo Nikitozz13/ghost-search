@@ -103,9 +103,19 @@ npm install ghost-search
         keys: [
             'title'
         ],
-        limit: 100,
-        threshold: -3500,
-        allowTypo: false
+        limit: 10,
+        async: true,
+        asyncChunks: 1,
+        shouldSort: true,
+        tokenize: true,
+        matchAllTokens: true,
+        includeMatches: true,
+        includeScore: true,
+        threshold: 0.3,
+        location: 0,
+        distance: 50000,
+        maxPatternLength: 32,
+        minMatchCharLength: 2
     },
     api: {
         resource: 'posts',
@@ -122,7 +132,8 @@ npm install ghost-search
         beforeDisplay: function(){},
         afterDisplay: function(results){},
         beforeFetch: function(){},
-        afterFetch: function(){}
+        afterFetch: function(){},
+        beforeSearch: function(){}
     }
 }
 ```
@@ -283,7 +294,7 @@ Default value: `'focus'`
 
 ### options
 
-`ghost-search` is using `fuzzysort` as an algorithm for search. The `option` parameter supports all the options from [fuzzysort](https://github.com/farzher/fuzzysort#options).
+Forked version of `ghost-search` now is using `Fuse.js` instead of `fuzzysort` as an algorithm for search. The `option` parameter supports all the options from [Fuse.js](https://github.com/krisk/fuse) and this demo site [Fuse.js](https://fusejs.io/).
 By default, `ghost-search` is showing the first 10 results and searches only based on title.
 
 Let's try another example that will show the first 3 results and searches both title and the content of a collection:
@@ -406,9 +417,10 @@ let ghostSearch = new GhostSearch({
 
 ### on
 
-This parameter has 4 methods in it: `beforeDisplay`, `afterDisplay`, `beforeFetch`, `afterFetch`. \
+This parameter has 5 methods in it right now: `beforeDisplay`, `afterDisplay`, `beforeFetch`, `afterFetch` and a new one `beforeSearch`. \
 `afterDisplay` and `afterFetch` have a parameter `results` that contains the results fetched. \
 They are useful to do things before results are visible to users.
+`beforeSearch` fires before search algorithm will start.
 
 Example:
 
@@ -426,6 +438,23 @@ let ghostSearch = new GhostSearch({
     }
 })
 ```
+
+## Async searching
+
+All the new parameters have been created for the best perfomance of searching.
+By default you will have a lot of async `Fuse` instances each and of them is calculating the search score for a single record. So instead of search and sort all of records in one time the new algorithm will search in all records one by one. This prevents the browser interface from hanging a lot.
+
+### async
+
+Default: ``true``
+
+When true, search algorithm will work in async mode.
+
+### asyncChunks
+
+Default: ``1``
+
+Show how much records of data will be calculating by a single `Fuse` instance. Smaller means you will have more instances but each other will work faster.
 
 ## Contributing
 
